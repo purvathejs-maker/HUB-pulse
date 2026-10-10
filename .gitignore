@@ -1,0 +1,20 @@
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+
+# Private attendance data
+*.db
+*.sqlite
+*.sqlite3
+face_data/
+
+# Local backups
+app_backup.py
+app_before_payroll.py
+attendance_backup.db
+attendance_before_payroll.db

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Face Enrollment{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">BIOMETRIC SETUP</span><h1>Face enrollment</h1><p>Capture local face samples for employee attendance matching.</p></div><span class="count-chip">{{ min_samples }} samples minimum</span></div>
+<div class="panel" style="padding:14px 18px;margin-bottom:20px"><strong>Privacy notice</strong><p class="camera-status">Get the employee's informed agreement first. Samples are stored locally in the project's <code>face_data</code> folder and are not uploaded to a third-party service. This demo uses basic LBPH matching and is not proof against photos, videos, or other spoofing. Provide a manual attendance alternative.</p></div>
+<div class="face-layout">
+  <section class="panel camera-panel">
+    <h2 style="font:700 15px Manrope,sans-serif;margin:0 0 14px">Capture an employee sample</h2>
+    <form method="post" id="enrollForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="image_data" id="imageData">
+      <label class="face-select">Employee
+        <select name="employee_id" id="employeeSelect" required>
+          <option value="">Choose employee</option>
+          {% for employee in employees %}<option value="{{ employee.id }}" {% if selected_employee_id == employee.id %}selected{% endif %}>{{ employee.name }} — {{ employee.department }} ({{ sample_counts.get(employee.id, 0) }} samples)</option>{% endfor %}
+        </select>
+      </label>
+      <div class="camera-frame"><video id="camera" autoplay playsinline muted></video><div class="camera-placeholder" id="cameraPlaceholder">Click “Start camera” and allow webcam access.</div></div>
+      <canvas id="canvas" hidden></canvas>
+      <label class="consent-check"><input type="checkbox" id="consent" name="consent_confirmed" value="yes" required><span>I confirm this employee has been informed and agreed to have face samples stored for attendance matching.</span></label>
+      <div class="camera-actions"><button type="button" class="btn secondary" id="startCamera">Start camera</button><button type="button" class="btn primary" id="captureSample">Capture and save sample</button></div>
+      <p class="camera-status" id="cameraStatus" aria-live="polite">Capture at least {{ min_samples }} samples. Change your head angle slightly between captures.</p>
+    </form>
+  </section>
+  <section class="panel face-instructions"><h2>Enrollment status</h2>
+    {% if employees %}<div class="table-scroll"><table><thead><tr><th>EMPLOYEE</th><th>SAMPLES</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
+    {% for employee in employees %}<tr><td><strong>{{ employee.name }}</strong><br><span class="face-table-status">{{ employee.email }}</span></td><td>{{ sample_counts.get(employee.id, 0) }}</td><td>{% if sample_counts.get(employee.id, 0) >= min_samples %}<span class="pill present">Ready</span>{% else %}<span class="pill neutral">Needs samples</span>{% endif %}</td><td>{% if sample_counts.get(employee.id, 0) > 0 %}<form method="post" action="{{ url_for('delete_face_profile', employee_id=employee.id) }}" onsubmit="return confirm('Delete all saved face samples for this employee?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="btn secondary">Delete samples</button></form>{% else %}—{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<p class="camera-status">Create an employee account first.</p>{% endif %}
+    <h2 style="margin-top:24px">Tips for better matching</h2><ul><li>Use even lighting and keep the face fully inside the frame.</li><li>Capture at least {{ min_samples }} samples per employee, with small natural angle changes.</li><li>Do not enroll multiple people in one frame.</li><li>Delete samples when an employee withdraws consent or leaves.</li></ul>
+  </section>
+</div>
+<script>
+(() => {
+  const video = document.getElementById('camera');
+  const placeholder = document.getElementById('cameraPlaceholder');
+  const status = document.getElementById('cameraStatus');
+  const form = document.getElementById('enrollForm');
+  const imageData = document.getElementById('imageData');
+  const canvas = document.getElementById('canvas');
+  let stream = null;
+  document.getElementById('startCamera').addEventListener('click', async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Camera access requires localhost or HTTPS in a supported browser.');
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}, audio:false});
+      video.srcObject = stream; video.classList.remove('hidden'); placeholder.hidden = true;
+      status.textContent = 'Camera ready. Look at the camera, then capture a sample.'; status.className = 'camera-status';
+    } catch (error) { status.textContent = error.message || 'Could not access webcam. Check browser permissions.'; status.className = 'camera-status error'; }
+  });
+  document.getElementById('captureSample').addEventListener('click', () => {
+    if (!stream || !video.videoWidth) { status.textContent = 'Start the camera and wait until the video appears.'; status.className = 'camera-status error'; return; }
+    if (!document.getElementById('employeeSelect').value) { status.textContent = 'Choose an employee first.'; status.className = 'camera-status error'; return; }
+    if (!document.getElementById('consent').checked) { status.textContent = 'Confirm employee consent before saving biometric data.'; status.className = 'camera-status error'; return; }
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d'); context.translate(canvas.width, 0); context.scale(-1, 1); context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    imageData.value = canvas.toDataURL('image/jpeg', 0.88).replace(/^data:image\/jpeg/, 'data:image/jpeg');
+    status.textContent = 'Saving sample…'; form.submit();
+  });
+  window.addEventListener('beforeunload', () => { if (stream) stream.getTracks().forEach(track => track.stop()); });
+})();
+</script>
+{% endblock %}

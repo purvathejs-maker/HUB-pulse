@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employees</title>
+</head>
+<body>
+    {% extends "base.html" %}{% block title %}Employees{% endblock %}{% block content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">YOUR TEAM</span>
+        <h1>Employees</h1>
+        <p>Create employee profiles and login accounts.</p>
+    </div>
+    <span class="count-chip">{{ employees|length }} employees</span>
+</div>
+
+<div class="two-column">
+    <section class="panel form-panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Add employee</h2>
+                <p>An employee login is created at the same time.</p>
+            </div>
+            <span class="stat-icon purple">＋</span>
+        </div>
+        <form method="post" class="stack-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label>Full name<input name="name" placeholder="e.g. Priya Sharma" required maxlength="100"></label>
+            <label>Work email / username<input name="email" type="email" placeholder="priya@company.com" required maxlength="150"></label>
+            <label>Department<input name="department" placeholder="e.g. Engineering" maxlength="100"></label>
+            <label>Hourly rate ($)<input name="hourly_rate" type="number" step="0.01" min="0" value="0.00" required></label>
+            <label>Initial password<input name="password" type="password" autocomplete="new-password" minlength="10" required><small class="field-help">At least 10 characters. Share it securely and ask the employee to change it later.</small></label>
+            <button class="btn primary full" type="submit">Add employee and login</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Team directory</h2>
+                <p>Employee account status and access.</p>
+            </div>
+        </div>
+        {% if employees %}
+        <div class="employee-list">
+            {% for employee in employees %}
+            <div class="employee-row employee-row-wrap">
+                <span class="person-avatar">{{ employee.name[:1]|upper }}</span>
+                <div class="employee-info">
+                    <strong>{{ employee.name }}</strong>
+                    <small>{{ employee.email }} · {{ employee.department }} · <strong>${{ "%.2f"|format(employee.hourly_rate) }}/hr</strong></small>
+                    
+                    {% if employee.login_username %}
+                        <span class="account-status">● Login enabled · {{ employee.login_username }}</span>
+                    {% else %}
+                        <span class="account-missing">No login account yet</span>
+                        <form method="post" action="{{ url_for('create_employee_login', employee_id=employee.id) }}" class="create-login-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="password" name="password" minlength="10" placeholder="Set initial password" autocomplete="new-password" required>
+                            <button class="btn secondary" type="submit">Create login</button>
+                        </form>
+                    {% endif %}
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <a href="{{ url_for('edit_employee', employee_id=employee.id) }}" class="btn secondary" style="padding: 4px 10px; font-size: 13px;">Edit</a>
+                    <form method="post" action="{{ url_for('delete_employee', employee_id=employee.id) }}" onsubmit="return confirm('Delete this employee, their login, and all attendance records?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button class="icon-button" title="Delete employee" aria-label="Delete employee">×</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state compact">
+            <div class="empty-icon">♙</div>
+            <strong>No employees yet</strong>
+            <p>Use the form to add your first employee.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
+</body>
+</html>

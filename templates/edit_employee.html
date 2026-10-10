@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Employee</title>
+</head>
+<body>
+    {% extends "base.html" %}
+{% block title %}Edit Employee{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">YOUR TEAM</span>
+        <h1>Edit Employee</h1>
+        <p>Update profile details, department, and pay rate.</p>
+    </div>
+</div>
+
+<section class="panel form-panel" style="max-width: 600px;">
+    <div class="panel-heading">
+        <div>
+            <h2>{{ employee.name }}</h2>
+            <p>Changes to the email address will also update their login username.</p>
+        </div>
+        <span class="stat-icon purple">✎</span>
+    </div>
+    
+    <form method="post" class="stack-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        
+        <label>
+            Full name
+            <input name="name" value="{{ employee.name }}" required maxlength="100">
+        </label>
+        
+        <label>
+            Work email / username
+            <input name="email" type="email" value="{{ employee.email }}" required maxlength="150">
+        </label>
+        
+        <label>
+            Department
+            <input name="department" value="{{ employee.department }}" maxlength="100">
+        </label>
+        
+        <label>
+            Hourly rate ($)
+            <input name="hourly_rate" type="number" step="0.01" min="0" value="{{ '%.2f'|format(employee.hourly_rate) }}" required>
+        </label>
+
+            <label>
+                Overtime Multiplier
+                <input name="overtime_multiplier" type="number" step="0.1" min="1.0" value="{{ employee.overtime_multiplier | default(1.5) }}" required>
+                <small style="color: #666;">(e.g., 1.5 for time-and-a-half, 2.0 for double time)</small>
+            </label>
+        
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button class="btn primary" type="submit">Save Changes</button>
+            <a class="btn secondary" href="{{ url_for('employees') }}" style="text-align: center;">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+</body>
+</html>

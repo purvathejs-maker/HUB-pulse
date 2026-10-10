@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block title %}Access denied{% endblock %}{% block content %}<div class="empty-state"><div class="empty-icon">!</div><h1>{{ code }} · Access denied</h1><p>{{ message }}</p><a class="btn primary" href="{{ url_for('attendance') }}"><a href="{{ url_for('leave') }}">Leave</a>Return to attendance</a></div>{% endblock %}

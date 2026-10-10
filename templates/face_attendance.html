@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Face Attendance{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">QUICK CHECK-IN</span><h1>Face attendance</h1><p>Scan an enrolled face to clock in or clock out.</p></div><span class="count-chip">Webcam required</span></div>
+<div class="panel" style="padding:14px 18px;margin-bottom:20px"><strong>Demo security limitation</strong><p class="camera-status">This prototype uses OpenCV LBPH face matching. It can make mistakes and does not detect presentation attacks such as printed photos or phone videos. Use it only with informed employee consent, keep manual clock-in available, and do not use it as the sole basis for payroll or disciplinary decisions.</p></div>
+<div class="face-layout">
+  <section class="panel camera-panel"><h2 style="font:700 15px Manrope,sans-serif;margin:0 0 14px">Scan your face</h2>
+    <form method="post" id="scanForm"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="baseline_data" id="baselineData"><input type="hidden" name="image_data" id="imageData">
+      <div class="camera-frame"><video id="camera" autoplay playsinline muted></video><div class="camera-placeholder" id="cameraPlaceholder">Click “Start camera” and allow webcam access.</div></div><canvas id="canvas" hidden></canvas>
+      <div class="camera-actions"><button type="button" class="btn secondary" id="startCamera">Start camera</button><button type="button" class="btn primary" id="scanFace">Start live check</button></div>
+      <p class="camera-status" id="cameraStatus" aria-live="polite">Step 1: capture a neutral frame. Step 2: move your face toward the {{ face_challenge|upper }} side of the video frame, then verify. This basic challenge is not reliable liveness proof. If it fails, use regular Attendance.</p>
+    </form>
+  </section>
+  <section class="panel face-instructions"><h2>How it works</h2><ol><li>Allow camera access in your browser.</li><li>Face the camera in similar lighting to enrollment.</li><li>Click “Start live check” to capture a baseline frame.</li><li>Move your face toward the randomly requested side of the video frame, then click “Verify and clock in/out”.</li><li>If no shift is open, HUB pulse clocks the recognized employee in. If a shift is open, it clocks that employee out.</li></ol><p class="camera-status">Your attendance event is saved in the existing HUB pulse database. The camera frame is processed on this server and is not stored during scanning.</p><a class="btn secondary" href="{{ url_for('attendance') }}"><a href="{{ url_for('leave') }}">Leave</a>Use regular attendance instead</a></section>
+</div>
+<script>
+(() => {
+  const video = document.getElementById('camera');
+  const placeholder = document.getElementById('cameraPlaceholder');
+  const status = document.getElementById('cameraStatus');
+  const form = document.getElementById('scanForm');
+  const imageData = document.getElementById('imageData');
+  const baselineData = document.getElementById('baselineData');
+  const canvas = document.getElementById('canvas');
+  let stream = null;
+  document.getElementById('startCamera').addEventListener('click', async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Camera access requires localhost or HTTPS in a supported browser.');
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}, audio:false});
+      video.srcObject = stream; placeholder.hidden = true;
+      status.textContent = 'Camera ready. Center your face, then scan.'; status.className = 'camera-status';
+    } catch (error) { status.textContent = error.message || 'Could not access webcam. Check browser permissions.'; status.className = 'camera-status error'; }
+  });
+  let baselineCaptured = false;
+  const scanButton = document.getElementById('scanFace');
+  function captureFrame() {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    context.save(); context.translate(canvas.width, 0); context.scale(-1, 1);
+    context.drawImage(video, 0, 0, canvas.width, canvas.height); context.restore();
+    return canvas.toDataURL('image/jpeg', 0.88);
+  }
+  scanButton.addEventListener('click', () => {
+    if (!stream || !video.videoWidth) { status.textContent = 'Start the camera and wait until the video appears.'; status.className = 'camera-status error'; return; }
+    if (!baselineCaptured) {
+      baselineData.value = captureFrame(); baselineCaptured = true;
+      scanButton.textContent = 'Verify and clock in/out';
+      status.textContent = 'Baseline captured. Move your face toward the {{ face_challenge|upper }} side of the video frame, keep one face visible, then click Verify.';
+      status.className = 'camera-status'; return;
+    }
+    imageData.value = captureFrame();
+    status.textContent = 'Checking the live challenge and face match…'; form.submit();
+  });
+  window.addEventListener('beforeunload', () => { if (stream) stream.getTracks().forEach(track => track.stop()); });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title> HUB pulse</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+  <aside class="sidebar">
+
+    <!-- HUB pulse logo -->
+    <a class="brand"
+       href="{{ url_for('dashboard') if current_user and current_user.role == 'admin' else url_for('attendance') }}">
+      <span class="brand-mark">W</span>
+      <span>HUB pulse</span>
+    </a>
+
+    <div class="nav-label">WORKSPACE</div>
+
+    <nav>
+
+      <!-- Admin Dashboard -->
+      {% if current_user and current_user.role == 'admin' %}
+      <a class="{% if request.endpoint == 'dashboard' %}active{% endif %}"
+         href="{{ url_for('dashboard') }}">
+        <span>▦</span> Dashboard
+      </a>
+      {% endif %}
+
+      <!-- Attendance for employees and admins -->
+      <a class="{% if request.endpoint == 'attendance' %}active{% endif %}"
+         href="{{ url_for('attendance') }}">
+        <span>◷</span>
+        {{ 'My attendance' if current_user and current_user.role == 'employee' else 'Attendance' }}
+      </a>
+
+      <!-- Leave for employees -->
+      <a class="{% if request.endpoint == 'leave' %}active{% endif %}"
+         href="{{ url_for('leave') }}">
+        <span>▤</span> Leave
+      </a>
+
+      <!-- Leave Requests for admins -->
+      {% if current_user and current_user.role == 'admin' %}
+      <a class="{% if request.endpoint == 'leave_requests' %}active{% endif %}"
+         href="{{ url_for('leave_requests') }}">
+        <span>✓</span> Leave Requests
+      </a>
+      {% endif %}
+
+      <!-- Face Attendance -->
+      <a class="{% if request.endpoint == 'face_attendance' %}active{% endif %}"
+         href="{{ url_for('face_attendance') }}">
+        <span>◎</span> Face attendance
+      </a>
+
+      <!-- My Payslips for employees -->
+      {% if current_user and current_user.role == 'employee' %}
+      <a class="{% if request.endpoint == 'my_payslips' %}active{% endif %}"
+         href="{{ url_for('my_payslips') }}">
+        <span>$</span> My Payslips
+      </a>
+      {% endif %}
+
+      <!-- Admin-only navigation -->
+      {% if current_user and current_user.role == 'admin' %}
+
+      <a class="{% if request.endpoint in ['employees', 'create_employee_login', 'delete_employee'] %}active{% endif %}"
+         href="{{ url_for('employees') }}">
+        <span>♙</span> Employees
+      </a>
+
+      <a class="{% if request.endpoint == 'shifts' %}active{% endif %}"
+         href="{{ url_for('shifts') }}">
+        <span>◷</span> Shift schedules
+      </a>
+
+      <a class="{% if request.endpoint == 'payroll' %}active{% endif %}"
+         href="{{ url_for('payroll') }}">
+        <span>$</span> Payroll
+      </a>
+
+      <a class="{% if request.endpoint in ['reports', 'export_reports'] %}active{% endif %}"
+         href="{{ url_for('reports') }}">
+        <span>▤</span> Reports
+      </a>
+
+      <a class="{% if request.endpoint in ['face_enrollment', 'delete_face_profile'] %}active{% endif %}"
+         href="{{ url_for('face_enrollment') }}">
+        <span>◎</span> Face enrollment
+      </a>
+
+      {% endif %}
+
+    </nav>
+      
+    <!-- Signed-in user and logout -->
+    <div class="sidebar-bottom">
+
+      <div class="avatar">
+        {{ (current_user.employee_name if current_user and current_user.employee_name else current_user.username if current_user else 'WT')[:2]|upper }}
+      </div>
+
+      <div class="account-label">
+        <strong>
+          {{ current_user.employee_name if current_user and current_user.employee_name else current_user.username if current_user else 'HUB pulse' }}
+        </strong>
+
+        <small>
+          {{ current_user.role|title if current_user else 'Not signed in' }}
+        </small>
+      </div>
+
+      <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="logout-button" type="submit" title="Sign out">↪</button>
+      </form>
+
+    </div>
+
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <header class="topbar page-heading">
+      <div>
+        <span class="eyebrow">WORKSPACE</span>
+
+        <strong>
+          {{ 'Administrator' if current_user and current_user.role == 'admin' else 'Employee portal' }}
+        </strong>
+      </div>
+
+      <!-- Top Right Controls -->
+      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <a href="#" id="darkModeToggle" class="btn secondary">
+            <span>🌙</span> Dark Mode
+        </a>
+        <a href="{{ url_for('change_password') }}" class="btn secondary">
+            <span>🔒</span> Password
+        </a>
+        <div class="today-chip">● Signed in</div>
+      </div>
+    </header>
+
+    <section class="content">
+
+      <!-- Flash messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-wrap">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <!-- Page content -->
+      {% block content %}{% endblock %}
+
+    </section>
+
+    <footer>HUB pulse · Attendance management</footer>
+
+  </main>
+  <script>
+    const toggleBtn = document.getElementById('darkModeToggle');
+    const body = document.body;
+    
+    // 1. Check if they already chose dark mode in a previous session
+    if (localStorage.getItem('HUB pulse_theme') === 'dark') {
+        body.classList.add('dark-mode');
+        if (toggleBtn) toggleBtn.innerHTML = '<span>☀️</span> Light Mode';
+    }
+
+    // 2. Listen for clicks on the toggle button
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault(); // Stop the link from jumping to the top of the page
+            body.classList.toggle('dark-mode');
+            
+            if (body.classList.contains('dark-mode')) {
+                localStorage.setItem('HUB pulse_theme', 'dark');
+                toggleBtn.innerHTML = '<span>☀️</span> Light Mode';
+            } else {
+                localStorage.setItem('HUB pulse_theme', 'light');
+                toggleBtn.innerHTML = '<span>🌙</span> Dark Mode';
+            }
+        });
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}My Leave{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">TIME OFF</span>
+        <h1>My Leave</h1>
+        <p>Request time off and view your available leave balances.</p>
+    </div>
+</div>
+
+<div class="stats-grid three-stats" style="margin-bottom: 24px;">
+    <article class="stat-card">
+        <div class="stat-top"><span>Casual Leave</span><span class="stat-icon blue">✈</span></div>
+        <div class="stat-value">{{ balances['Casual']['remaining'] }} <small style="font-size: 16px; color: #666;">/ {{ balances['Casual']['total'] }} days</small></div>
+        <div class="stat-foot">{{ balances['Casual']['used'] }} days used</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span>Sick Leave</span><span class="stat-icon orange">♥</span></div>
+        <div class="stat-value">{{ balances['Sick']['remaining'] }} <small style="font-size: 16px; color: #666;">/ {{ balances['Sick']['total'] }} days</small></div>
+        <div class="stat-foot">{{ balances['Sick']['used'] }} days used</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span>Personal Leave</span><span class="stat-icon purple">★</span></div>
+        <div class="stat-value">{{ balances['Personal']['remaining'] }} <small style="font-size: 16px; color: #666;">/ {{ balances['Personal']['total'] }} days</small></div>
+        <div class="stat-foot">{{ balances['Personal']['used'] }} days used</div>
+    </article>
+</div>
+
+<div class="two-column">
+    <section class="panel form-panel">
+        <div class="panel-heading"><h2>Request Leave</h2></div>
+        <form method="POST" class="stack-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            
+            <label>Leave Type
+                <select name="leave_type" required>
+                    <option value="">Select type...</option>
+                    {% for type in leave_types %}
+                        <option value="{{ type.value }}">{{ type.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            
+            <label>Start Date<input type="date" name="start_date" min="{{ today }}" required></label>
+            <label>End Date<input type="date" name="end_date" min="{{ today }}" required></label>
+            <label>Reason<textarea name="reason" rows="3" required maxlength="1000"></textarea></label>
+            
+            <button class="btn primary full" type="submit">Submit Request</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading"><h2>Leave History</h2></div>
+        {% if leave_requests %}
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>DATES</th><th>TYPE</th><th>STATUS</th></tr></thead>
+                <tbody>
+                    {% for r in leave_requests %}
+                    <tr>
+                        <td><strong>{{ r.start_date }}</strong> to <strong>{{ r.end_date }}</strong></td>
+                        <td>{{ r.leave_type }}</td>
+                        <td>
+                            {% if r.status == 'Approved' %}
+                                <strong style="color: #27ae60;">{{ r.status }}</strong>
+                            {% elif r.status in ('Rejected', 'Cancelled') %}
+                                <strong style="color: #e74c3c;">{{ r.status }}</strong>
+                            {% else %}
+                                <strong style="color: #f39c12;">{{ r.status }}</strong>
+                            {% endif %}
+                            
+                            {% if r.status == 'Pending' %}
+                                <form method="POST" action="{{ url_for('cancel_leave_request', request_id=r.id) }}" style="margin-top: 5px;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button class="btn secondary" style="padding: 2px 8px; font-size: 12px;">Cancel</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state compact"><strong>No history</strong><p>You haven't requested any leave yet.</p></div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

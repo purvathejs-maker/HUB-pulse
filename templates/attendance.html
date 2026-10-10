@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Attendance{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="eyebrow">LIVE TIME TRACKING</span><h1>{{ 'My attendance' if not is_admin else 'Live attendance' }}</h1>
+    <p>{{ 'Your current shift duration updates live. Your page refreshes automatically when safe to do so.' if not is_admin else 'Monitor active shifts, daily working hours, and estimated overtime.' }}</p>
+  </div>
+  <span class="count-chip">{{ today }}</span>
+</div>
+
+<div class="stats-grid three-stats live-stats">
+  <article class="stat-card"><div class="stat-top"><span>Today's recorded work time</span><span class="stat-icon blue">◷</span></div><div class="stat-value small-value">{{ today_total_hours }}</div><div class="stat-foot">Combined time across today's shifts</div></article>
+  <article class="stat-card"><div class="stat-top"><span>Estimated overtime</span><span class="stat-icon orange">↗</span></div><div class="stat-value small-value">{{ today_total_overtime }}</div><div class="stat-foot">Above {{ daily_standard_hours|int }} hours per employee today</div></article>
+  <article class="stat-card"><div class="stat-top"><span>Active shifts</span><span class="stat-icon green">●</span></div><div class="stat-value">{{ records|selectattr('clock_out', 'none')|list|length }}</div><div class="stat-foot">Currently clocked in</div></article>
+</div>
+
+<section class="panel form-panel attendance-action">
+  <div class="panel-heading"><div><h2>Clock in / Clock out</h2><p>{% if is_admin %}Select an employee and choose an action.{% else %}You can record attendance only for your linked employee profile.{% endif %}</p></div><span class="stat-icon blue">◷</span></div>
+  {% if employees %}
+  <form method="post" class="clock-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if is_admin %}<label class="grow">Employee<select name="employee_id" required><option value="">Choose an employee</option>{% for employee in employees %}<option value="{{ employee.id }}">{{ employee.name }} — {{ employee.department }}</option>{% endfor %}</select></label>
+    {% else %}<div class="grow employee-clock-label"><strong>{{ employees[0].name }}</strong><small>{{ employees[0].department }} · {{ employees[0].email }}</small></div>{% endif %}
+    <button class="btn success" name="action" value="in">Clock in</button><button class="btn secondary" name="action" value="out">Clock out</button><button class="btn secondary" name="action" value="break_start">Start break</button><button class="btn secondary" name="action" value="break_end">End break</button>
+  </form>
+  {% else %}<div class="inline-notice">No employee profile is linked to your account. Contact the administrator.</div>{% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-heading"><div><h2>Today's live records</h2><p>{{ records|length }} shift record(s). Active durations tick every second; server records refresh every 30 seconds when the page is not being edited.</p></div><span class="pill present">● Live</span></div>
+  {% if records %}
+  <div class="table-scroll"><table><thead><tr>
+    {% if is_admin %}<th>EMPLOYEE</th><th>DEPARTMENT</th>{% endif %}
+    <th>CLOCK IN</th><th>CLOCK OUT</th><th>WORKED TIME</th><th>BREAK TIME</th><th>HOURS TODAY</th><th>OVERTIME TODAY</th><th>STATUS</th>
+  </tr></thead><tbody>
+  {% for row in records %}
+  {% set totals = daily_totals.get(row.employee_id, {'hours':'0h 00m','overtime':'0h 00m','minutes':0,'overtime_minutes':0}) %}
+  {% set meta = attendance_meta.get(row.id, {'break_minutes':0,'on_break':false,'break_start':none,'late':false}) %}
+  <tr>
+    {% if is_admin %}<td><div class="person-cell"><span class="person-avatar">{{ row.name[:1]|upper }}</span><strong>{{ row.name }}</strong></div></td><td>{{ row.department }}</td>{% endif %}
+    <td>{{ row.clock_in[11:16] }}</td><td>{{ row.clock_out[11:16] if row.clock_out else '—' }}</td>
+    <td><strong>{{ row|duration }}</strong></td>
+    <td>{{ meta.break_minutes // 60 }}h {{ '%02d'|format(meta.break_minutes % 60) }}m{% if meta.on_break %}<span class="pill overtime">Break active</span>{% endif %}</td>
+    <td><strong>{{ totals.hours }}</strong></td>
+    <td>{% if totals.overtime_minutes > 0 %}<span class="pill overtime">{{ totals.overtime }}</span>{% else %}<span class="pill neutral">{{ totals.overtime }}</span>{% endif %}</td>
+    <td>{% if meta.late %}<span class="pill overtime">Late ({{ row.late_minutes }}m)</span>{% endif %}{% if row.clock_out %}<span class="pill neutral">Completed</span>{% elif meta.on_break %}<span class="pill overtime">On break</span>{% else %}<span class="pill present">● Active</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state"><div class="empty-icon">◷</div><strong>No attendance records yet today</strong><p>Use the form above to clock in.</p></div>{% endif %}
+</section>
+<script>
+(() => {
+  window.setInterval(() => {
+    const editingForm = document.activeElement && document.activeElement.closest('form');
+    if (document.visibilityState === 'visible' && !editingForm) window.location.reload();
+  }, 30000);
+})();
+</script>
+{% endblock %}

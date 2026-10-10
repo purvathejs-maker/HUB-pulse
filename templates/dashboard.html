@@ -1,0 +1,392 @@
+
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">OVERVIEW</span>
+        <h1>Dashboard</h1>
+        <p>Attendance trends, working hours, and overtime for your team.</p>
+    </div>
+
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a class="btn primary" href="{{ url_for('attendance') }}">
+            Track attendance
+        </a>
+        <a class="btn secondary" href="{{ url_for('leave') }}">
+            Leave Request
+        </a>
+    </div>
+</div>
+
+<div class="date-banner">
+    <div class="date-icon">▦</div>
+    <div>
+        <strong>Today's attendance</strong>
+        <small>{{ today }}</small>
+    </div>
+    <span class="banner-status">Live summary</span>
+</div>
+
+<div class="stats-grid">
+    <article class="stat-card">
+        <div class="stat-top">
+            <span>Total employees</span>
+            <span class="stat-icon purple">♙</span>
+        </div>
+        <div class="stat-value">{{ total_employees }}</div>
+        <div class="stat-foot">Registered in the system</div>
+    </article>
+
+    <article class="stat-card">
+        <div class="stat-top">
+            <span>Present today</span>
+            <span class="stat-icon green">✓</span>
+        </div>
+        <div class="stat-value">{{ present_today }}</div>
+        <div class="stat-foot">Unique employees clocked in</div>
+    </article>
+
+    <article class="stat-card">
+        <div class="stat-top">
+            <span>Active shifts</span>
+            <span class="stat-icon blue">◷</span>
+        </div>
+        <div class="stat-value">{{ open_shifts }}</div>
+        <div class="stat-foot">Currently clocked in</div>
+    </article>
+
+    <article class="stat-card">
+        <div class="stat-top">
+            <span>Today's work time</span>
+            <span class="stat-icon orange">◷</span>
+        </div>
+        <div class="stat-value small-value">{{ today_total_hours }}</div>
+        <div class="stat-foot">Combined hours across today's shifts</div>
+    </article>
+</div>
+
+<div class="section-heading-row">
+    <div>
+        <span class="eyebrow">MONTHLY ANALYTICS</span>
+        <h2>{{ month_label }}</h2>
+        <p>Daily attendance, total work hours, and estimated overtime.</p>
+    </div>
+
+    <form method="get" class="month-picker">
+        <label for="month">Choose month</label>
+        <input id="month" type="month" name="month" value="{{ month_value }}">
+        <button class="btn secondary" type="submit">View month</button>
+    </form>
+</div>
+
+<div class="stats-grid three-stats">
+    <article class="stat-card">
+        <div class="stat-top">
+            <span>Total recorded work time</span>
+            <span class="stat-icon blue">◷</span>
+        </div>
+        <div class="stat-value small-value">{{ month_total_hours }}</div>
+        <div class="stat-foot">All employee shifts in this month</div>
+    </article>
+
+    <article class="stat-card">
+        <div class="stat-top">
+            <span>Monthly estimated overtime</span>
+            <span class="stat-icon orange">↗</span>
+        </div>
+        <div class="stat-value small-value">{{ month_total_overtime }}</div>
+        <div class="stat-foot">
+            Above {{ daily_standard_hours|int }} hours per employee per day
+        </div>
+    </article>
+
+    <article class="stat-card">
+        <div class="stat-top">
+            <span>Today's estimated overtime</span>
+            <span class="stat-icon orange">↗</span>
+        </div>
+        <div class="stat-value small-value">{{ today_total_overtime }}</div>
+        <div class="stat-foot">
+            Over {{ daily_standard_hours|int }} hours per employee today
+        </div>
+    </article>
+</div>
+
+<div class="stat-card live-refresh-note">
+    <span class="pill present">● Live summary</span>
+    Dashboard totals and activity refresh every 30 seconds while this page is visible.
+</div>
+
+<div class="chart-grid">
+    <section class="panel chart-panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Daily attendance</h2>
+                <p>Number of employees with a recorded shift each day.</p>
+            </div>
+        </div>
+        <div class="chart-wrap">
+            <canvas id="attendanceChart" aria-label="Daily attendance chart"></canvas>
+        </div>
+    </section>
+
+    <section class="panel chart-panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Work hours and overtime</h2>
+                <p>Hours recorded each day. Overtime is summed per employee-day.</p>
+            </div>
+        </div>
+        <div class="chart-wrap">
+            <canvas id="hoursChart" aria-label="Work hours and overtime chart"></canvas>
+        </div>
+    </section>
+</div>
+
+<section class="panel">
+    <div class="panel-heading">
+        <div>
+            <h2>Monthly employee summary</h2>
+            <p>Unique attendance days, total hours, and overtime by employee.</p>
+        </div>
+
+        <a class="text-link"
+           href="{{ url_for('reports', start=month_value ~ '-01', end=today if today[:7] == month_value else month_end_value) }}">
+            Open reports →
+        </a>
+    </div>
+
+    {% if employee_summary %}
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>EMPLOYEE</th>
+                    <th>DEPARTMENT</th>
+                    <th>ATTENDANCE DAYS</th>
+                    <th>TOTAL HOURS</th>
+                    <th>OVERTIME</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in employee_summary %}
+                <tr>
+                    <td>
+                        <div class="person-cell">
+                            <span class="person-avatar">{{ item.name[:1]|upper }}</span>
+                            <strong>{{ item.name }}</strong>
+                        </div>
+                    </td>
+                    <td>{{ item.department }}</td>
+                    <td>{{ item.days }}</td>
+                    <td>{{ item.hours }}</td>
+                    <td>
+                        {% if item.overtime_minutes > 0 %}
+                            <span class="pill overtime">{{ item.overtime }}</span>
+                        {% else %}
+                            <span class="pill neutral">{{ item.overtime }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">▤</div>
+        <strong>No monthly data yet</strong>
+        <p>Record employee attendance to populate charts and summaries.</p>
+    </div>
+    {% endif %}
+</section>
+
+<div class="panel">
+    <div class="panel-heading">
+        <div>
+            <h2>Today’s live activity</h2>
+            <p>Most recent clock-in records, including active shift duration</p>
+        </div>
+        <a class="text-link" href="{{ url_for('attendance') }}">View attendance →</a>
+    </div>
+
+    {% if recent %}
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>EMPLOYEE</th>
+                    <th>DEPARTMENT</th>
+                    <th>CLOCK IN</th>
+                    <th>CLOCK OUT</th>
+                    <th>SHIFT DURATION</th>
+                    <th>STATUS</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in recent %}
+                <tr>
+                    <td>
+                        <div class="person-cell">
+                            <span class="person-avatar">{{ row.name[:1] | upper }}</span>
+                            <strong>{{ row.name }}</strong>
+                        </div>
+                    </td>
+                    <td>{{ row.department }}</td>
+                    <td>{{ row.clock_in[11:16] }}</td>
+                    <td>{{ row.clock_out[11:16] if row.clock_out else '—' }}</td>
+                    <td>
+                        {% if not row.clock_out %}
+                            <strong class="live-duration" data-clock-in="{{ row.clock_in }}">
+                                {{ row|duration }}
+                            </strong>
+                        {% else %}
+                            {{ row|duration }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.clock_out %}
+                            <span class="pill neutral">Completed</span>
+                        {% else %}
+                            <span class="pill present">● Active</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">◷</div>
+        <strong>No attendance records today</strong>
+        <p>Add an employee, then clock them in to see activity here.</p>
+        <a class="btn primary" href="{{ url_for('employees') }}">Add first employee</a>
+    </div>
+    {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script type="application/json" id="dashboard-data">
+{
+  "labels": {{ chart_labels | tojson }},
+  "attendance": {{ chart_attendance | tojson }},
+  "hours": {{ chart_hours | tojson }},
+  "overtime": {{ chart_overtime | tojson }}
+}
+</script>
+
+<script>
+const dashboardDataEl = document.getElementById('dashboard-data');
+const dashboardData = dashboardDataEl ? JSON.parse(dashboardDataEl.textContent || '{}') : {};
+const labels = Array.isArray(dashboardData.labels) ? dashboardData.labels : [];
+const attendanceData = Array.isArray(dashboardData.attendance) ? dashboardData.attendance : [];
+const workHours = Array.isArray(dashboardData.hours) ? dashboardData.hours : [];
+const overtimeHours = Array.isArray(dashboardData.overtime) ? dashboardData.overtime : [];
+
+const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+        legend: {
+            labels: {
+                usePointStyle: true,
+                boxWidth: 8,
+                font: { family: 'DM Sans', size: 11 }
+            }
+        }
+    },
+    scales: {
+        x: {
+            grid: { display: false },
+            ticks: { maxTicksLimit: 10 }
+        },
+        y: {
+            beginAtZero: true,
+            ticks: { precision: 0 },
+            grid: { color: '#edf0f5' }
+        }
+    }
+};
+
+const attendanceChartEl = document.getElementById('attendanceChart');
+if (attendanceChartEl) {
+    new Chart(attendanceChartEl, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Employees present',
+                data: attendanceData,
+                borderColor: '#5369e8',
+                backgroundColor: 'rgba(83,105,232,.12)',
+                fill: true,
+                tension: .32,
+                pointRadius: 2,
+                pointHoverRadius: 5
+            }]
+        },
+        options: commonOptions
+    });
+}
+
+const hoursChartEl = document.getElementById('hoursChart');
+if (hoursChartEl) {
+    new Chart(hoursChartEl, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Work hours',
+                    data: workHours,
+                    backgroundColor: 'rgba(79,107,237,.78)',
+                    borderRadius: 4
+                },
+                {
+                    label: 'Overtime hours',
+                    data: overtimeHours,
+                    backgroundColor: 'rgba(226,151,52,.82)',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: commonOptions
+    });
+}
+
+(() => {
+    const nodes = document.querySelectorAll('.live-duration');
+
+    function tick() {
+        const now = Date.now();
+
+        nodes.forEach(node => {
+            const start = Date.parse(node.dataset.clockIn);
+            if (!Number.isFinite(start)) return;
+
+            const minutes = Math.max(0, Math.floor((now - start) / 60000));
+            node.textContent =
+                `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
+        });
+    }
+
+    tick();
+    window.setInterval(tick, 1000);
+
+    window.setInterval(() => {
+        if (
+            document.visibilityState === 'visible' &&
+            !(document.activeElement && document.activeElement.closest('form'))
+        ) {
+            window.location.reload();
+        }
+    }, 30000);
+})();
+</script>
+
+{% endblock %}

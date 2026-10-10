@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Shift schedules{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">ATTENDANCE RULES</span><h1>Shift schedules</h1><p>Set each employee's normal daily start, end, and late-arrival grace period.</p></div></div>
+<section class="panel"><div class="panel-heading"><div><h2>Employee schedules</h2><p>Times use the server's local time and 24-hour format. Overnight shifts are not supported in this version.</p></div></div>
+{% if employees %}<div class="table-scroll"><table><thead><tr><th>EMPLOYEE</th><th>SHIFT START</th><th>SHIFT END</th><th>GRACE (MIN)</th><th>ACTION</th></tr></thead><tbody>
+{% for employee in employees %}<tr><td><div class="person-cell"><span class="person-avatar">{{ employee.name[:1]|upper }}</span><div><strong>{{ employee.name }}</strong><small>{{ employee.department }} · {{ employee.email }}</small></div></div></td>
+<td colspan="4"><form method="post" class="clock-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="employee_id" value="{{ employee.id }}"><label>Start<input type="time" name="shift_start" value="{{ employee.shift_start or '09:00' }}" required></label><label>End<input type="time" name="shift_end" value="{{ employee.shift_end or '17:00' }}" required></label><label>Grace minutes<input type="number" name="grace_minutes" value="{{ employee.grace_minutes if employee.grace_minutes is not none else 10 }}" min="0" max="120" required></label><button class="btn success" type="submit">Save</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty-state"><strong>No employees yet</strong><p>Add employees before setting schedules.</p></div>{% endif %}</section>
+<section class="panel"><h2>How late arrivals are calculated</h2><p>HUB pulse records the number of minutes after the scheduled start. A late flag is shown only when the arrival exceeds the employee's configured grace period. Existing attendance rows are retained; their new late_minutes field defaults to zero because historical scheduled times cannot be reconstructed reliably.</p></section>
+{% endblock %}

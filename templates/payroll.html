@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll Management</title>
+</head>
+<body>
+    {% extends "base.html" %}
+{% block title %}Payroll Management{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">FINANCE</span>
+        <h1>Payroll Management</h1>
+        <p>Generate, calculate, and process employee wages based on tracked hours.</p>
+    </div>
+</div>
+
+<section class="panel form-panel" style="margin-bottom: 24px;">
+    <div class="panel-heading">
+        <div>
+            <h2>Generate Payroll</h2>
+            <p>Select a month to calculate regular and overtime pay.</p>
+        </div>
+        <span class="stat-icon purple">$</span>
+    </div>
+    <form method="post" style="display: flex; gap: 12px; align-items: flex-end; padding: 0 20px 20px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="action" value="generate">
+        
+        <label style="display: flex; flex-direction: column; gap: 6px; font-weight: 600;">
+            Select Month
+            <input type="month" name="month" value="{{ month_value }}" required style="padding: 8px; border-radius: 6px; border: 1px solid #d1d5db;">
+        </label>
+        
+        <button class="btn primary" type="submit">Generate / Update Payroll</button>
+    </form>
+</section>
+
+<section class="panel">
+    <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2>Payslips for {{ month_value }}</h2>
+            <p>Overview of calculated gross pay and payment statuses.</p>
+        </div>
+        <div style="text-align: right;">
+            <span class="eyebrow">TOTAL PAYOUT</span>
+            <div style="font-size: 20px; font-weight: 800; color: #0f172a;">${{ "%.2f"|format(total_payout) }}</div>
+        </div>
+    </div>
+
+    {% if payrolls %}
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>EMPLOYEE</th>
+                    <th>REGULAR TIME</th>
+                    <th>OVERTIME</th>
+                    <th>RATE</th>
+                    <th>GROSS PAY</th>
+                    <th>STATUS</th>
+                    <th>ACTION</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in payrolls %}
+                <tr>
+                    <td>
+                        <div class="person-cell">
+                            <span class="person-avatar">{{ p.name[:1]|upper }}</span>
+                            <div>
+                                <strong>{{ p.name }}</strong>
+                                <small style="display: block; color: #64748b;">{{ p.department }}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>{{ (p.total_regular_minutes // 60) }}h {{ (p.total_regular_minutes % 60) }}m</td>
+                    <td>
+                        {% if p.total_overtime_minutes > 0 %}
+                            <span class="pill overtime">{{ (p.total_overtime_minutes // 60) }}h {{ (p.total_overtime_minutes % 60) }}m</span>
+                        {% else %}
+                            <span class="pill neutral">0h 0m</span>
+                        {% endif %}
+                    </td>
+                    <td>${{ "%.2f"|format(p.hourly_rate) }}/hr</td>
+                    <td><strong style="font-size: 1.1em;">${{ "%.2f"|format(p.gross_pay) }}</strong></td>
+                    <td>
+                        {% if p.status == 'Paid' %}
+                            <span class="pill present">Paid</span>
+                        {% else %}
+                            <span class="pill overtime">Draft</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if p.status == 'Draft' %}
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="action" value="mark_paid">
+                            <input type="hidden" name="month" value="{{ month_value }}">
+                            <input type="hidden" name="payroll_id" value="{{ p.id }}">
+                            <button type="submit" class="btn success" style="padding: 4px 10px; font-size: 13px;">Mark as Paid</button>
+                        </form>
+                        {% else %}
+                            <span style="color: #10b981; font-weight: 600; font-size: 13px;">✓ Settled</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">$</div>
+        <strong>No payroll generated</strong>
+        <p>Select a month above and click Generate to calculate wages.</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
+</body>
+</html>

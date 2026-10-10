@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Payslip - {{ payslip.period_month }}{% endblock %}
+
+{% block content %}
+<style>
+    .payslip-container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border: 1px solid #ddd; border-radius: 8px; }
+    .payslip-header { display: flex; justify-content: space-between; border-bottom: 2px solid #2c3e50; padding-bottom: 20px; margin-bottom: 30px; }
+    .payslip-header h1 { margin: 0; color: #2c3e50; font-size: 28px; }
+    .payslip-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+    .payslip-table th, .payslip-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+    .payslip-table th { background-color: #f8f9fa; }
+    .total-row { font-size: 18px; font-weight: bold; background-color: #f8f9fa; }
+    .status-paid { color: green; }
+    .status-pending { color: orange; }
+    
+    /* This hides the HUB pulse navigation and buttons when printing/saving to PDF */
+    @media print {
+        body { background: white; margin: 0; padding: 0; }
+        nav, .sidebar, .topbar, .no-print { display: none !important; }
+        .main { margin: 0 !important; padding: 0 !important; }
+        .container, .content, .payslip-container { border: none; box-shadow: none; padding: 0; width: 100%; max-width: 100%; }
+    }
+</style>
+
+<div class="payslip-container">
+    <div class="no-print" style="margin-bottom: 20px;">
+        <!-- Browser native print dialog automatically allows saving as PDF -->
+        <button onclick="window.print()" class="btn primary">🖨️ Print / Save as PDF</button>
+        <a href="javascript:history.back()" class="btn secondary">Back</a>
+    </div>
+
+    <div class="payslip-header">
+        <div>
+            <h1>OFFICIAL PAYSLIP</h1>
+            <p><strong>HUB pulse Attendance System</strong></p>
+        </div>
+        <div style="text-align: right;">
+            <p><strong>Status:</strong> 
+                {% if payslip.status == 'Paid' %}
+                    <span style="color: green;">Paid</span>
+                {% else %}
+                    <span style="color: orange;">{{ payslip.status }}</span>
+                {% endif %}
+            </p>
+            <p><strong>Date Issued:</strong> {{ payslip.created_at[:10] }}</p>
+        </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+        <div>
+            <h3>Employee Details</h3>
+            <p><strong>Name:</strong> {{ payslip.name }}</p>
+            <p><strong>Email:</strong> {{ payslip.email }}</p>
+            <p><strong>Department:</strong> {{ payslip.department }}</p>
+        </div>
+        <div style="text-align: right;">
+            <h3>Pay Period</h3>
+            <p style="font-size: 20px; font-weight: bold;">{{ payslip.period_month }}</p>
+        </div>
+    </div>
+
+    <table class="payslip-table">
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>Hours</th>
+                <th>Rate</th>
+                <th style="text-align: right;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Regular Working Time</td>
+                <td>{{ "%.2f"|format(payslip.total_regular_minutes / 60) }} hrs</td>
+                <td>${{ "%.2f"|format(payslip.hourly_rate) }}/hr</td>
+                <td style="text-align: right;">${{ "%.2f"|format((payslip.total_regular_minutes / 60) * payslip.hourly_rate) }}</td>
+            </tr>
+            <tr>
+                <td>Overtime (1.5x Multiplier)</td>
+                <td>{{ "%.2f"|format(payslip.total_overtime_minutes / 60) }} hrs</td>
+                <td>${{ "%.2f"|format(payslip.hourly_rate * 1.5) }}/hr</td>
+                <td style="text-align: right;">${{ "%.2f"|format((payslip.total_overtime_minutes / 60) * (payslip.hourly_rate * 1.5)) }}</td>
+            </tr>
+            <tr class="total-row">
+                <td colspan="3" style="text-align: right;">GROSS PAY:</td>
+                <td style="text-align: right; color: #27ae60;">${{ "%.2f"|format(payslip.gross_pay) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <p style="text-align: center; color: #666; font-size: 14px; margin-top: 50px;">
+        This is a system-generated document. For payroll inquiries, please contact your administrator.
+    </p>
+</div>
+{% endblock %}
