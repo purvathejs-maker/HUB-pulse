@@ -69,6 +69,28 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <button class="icon-button" title="Delete employee" aria-label="Delete employee">×</button>
                     </form>
+                    
+<form method="POST"
+      action="{{ url_for('reset_employee_password', employee_id=employee.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <label for="temp-password-{{ employee.id }}">
+        Temporary password
+    </label>
+
+    <input
+        id="temp-password-{{ employee.id }}"
+        type="password"
+        name="temporary_password"
+        minlength="12"
+        required
+        autocomplete="new-password"
+        placeholder="At least 12 characters"
+    >
+
+    <button type="submit">Reset Employee Password</button>
+</form>
+
                 </div>
             </div>
             {% endfor %}

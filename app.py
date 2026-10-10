@@ -27,18 +27,27 @@ DATABASE = BASE_DIR / "attendance.db"
 DAILY_STANDARD_HOURS = 8.0
 FACE_DATA_DIR = BASE_DIR / "face_data"
 FACE_DATA_DIR.mkdir(exist_ok=True)
-FACE_MATCH_THRESHOLD = float(os.environ.get("HUB pulse_FACE_MATCH_THRESHOLD", "75.0"))  # Lower is stricter; calibrate with real enrolled samples.
-FACE_AMBIGUITY_MARGIN = float(os.environ.get("HUB pulse_FACE_AMBIGUITY_MARGIN", "8.0"))  # Require a clear gap from the next-best employee.
+
+FACE_MATCH_THRESHOLD = float(
+    os.environ.get("WORKTRACK_FACE_MATCH_THRESHOLD", "75.0")
+)
+FACE_AMBIGUITY_MARGIN = float(
+    os.environ.get("WORKTRACK_FACE_AMBIGUITY_MARGIN", "8.0")
+)
+  # Require a clear gap from the next-best employee.
 FACE_MIN_SAMPLES = 3
 FACE_CHALLENGE_MIN_SHIFT = 0.07  # Minimum horizontal face-center movement as a fraction of frame width.
 FACE_ATTEMPT_COOLDOWN_SECONDS = 20
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("HUB pulse_SECRET_KEY", "dev-only-change-this-secret-before-deployment")
+app.secret_key = os.environ.get(
+    "WORKTRACK_SECRET_KEY",
+    "dev-only-change-this-secret-before-deployment"
+)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=os.environ.get("HUB pulse_HTTPS", "0") == "1",
+    SESSION_COOKIE_SECURE=os.environ.get("WORKTRACK_HTTPS", "0") == "1",
     PERMANENT_SESSION_LIFETIME=60 * 60 * 8,
     MAX_CONTENT_LENGTH=5 * 1024 * 1024,
 )
@@ -61,6 +70,7 @@ def close_db(exception=None):
 
 def init_db():
     db = get_db()
+
     db.executescript("""
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,6 +79,7 @@ def init_db():
             department TEXT NOT NULL DEFAULT 'General',
             created_at TEXT NOT NULL
         );
+
         CREATE TABLE IF NOT EXISTS attendance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id INTEGER NOT NULL,
@@ -77,6 +88,7 @@ def init_db():
             clock_out TEXT,
             FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
         );
+
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -86,12 +98,14 @@ def init_db():
             created_at TEXT NOT NULL,
             FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
         );
+
         CREATE TABLE IF NOT EXISTS login_attempts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             attempted_at INTEGER NOT NULL,
             successful INTEGER NOT NULL DEFAULT 0
         );
+
         CREATE TABLE IF NOT EXISTS attendance_breaks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             attendance_id INTEGER NOT NULL,
@@ -99,7 +113,7 @@ def init_db():
             break_end TEXT,
             FOREIGN KEY(attendance_id) REFERENCES attendance(id) ON DELETE CASCADE
         );
-        
+
         CREATE TABLE IF NOT EXISTS leave_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id INTEGER NOT NULL,
@@ -114,13 +128,11 @@ def init_db():
             created_at TEXT NOT NULL,
             reviewed_by_user_id INTEGER,
             reviewed_at TEXT,
-            FOREIGN KEY(employee_id)
-                REFERENCES employees(id) ON DELETE CASCADE,
-            FOREIGN KEY(reviewed_by_user_id)
-                REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+            FOREIGN KEY(reviewed_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
             CHECK(start_date <= end_date)
         );
-        
+
         CREATE TABLE IF NOT EXISTS payroll (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id INTEGER NOT NULL,
@@ -129,71 +141,73 @@ def init_db():
             total_overtime_minutes INTEGER NOT NULL DEFAULT 0,
             hourly_rate REAL NOT NULL,
             gross_pay REAL NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Draft' CHECK(status IN ('Draft', 'Paid')),
+            status TEXT NOT NULL DEFAULT 'Draft'
+                CHECK(status IN ('Draft', 'Paid')),
             created_at TEXT NOT NULL,
             FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE,
             UNIQUE(employee_id, period_month)
         );
-        
-        CREATE INDEX IF NOT EXISTS idx_leave_employee_dates
-            ON leave_requests(employee_id, start_date, end_date);
-        CREATE INDEX IF NOT EXISTS idx_leave_status
-            ON leave_requests(status);
-        CREATE INDEX IF NOT EXISTS idx_attendance_day ON attendance(work_date);
-        CREATE INDEX IF NOT EXISTS idx_attendance_employee_day ON attendance(employee_id, work_date);
-        CREATE INDEX IF NOT EXISTS idx_login_attempts_time ON login_attempts(attempted_at);
-        CREATE INDEX IF NOT EXISTS idx_payroll_period ON payroll(period_month);
-    """)
-    # Additive migrations: existing employee and attendance records are preserved.
-    employee_columns = {row[1] for row in db.execute("PRAGMA table_info(employees)").fetchall()}
-    if "shift_start" not in employee_columns:
-        db.execute("ALTER TABLE employees ADD COLUMN shift_start TEXT NOT NULL DEFAULT '09:00'")
-    if "shift_end" not in employee_columns:
-        db.execute("ALTER TABLE employees ADD COLUMN shift_end TEXT NOT NULL DEFAULT '17:00'")
-    if "grace_minutes" not in employee_columns:
-        db.execute("ALTER TABLE employees ADD COLUMN grace_minutes INTEGER NOT NULL DEFAULT 10")
-    if "hourly_rate" not in employee_columns:
-        db.execute("ALTER TABLE employees ADD COLUMN hourly_rate REAL NOT NULL DEFAULT 0.0")
-        
-    attendance_columns = {row[1] for row in db.execute("PRAGMA table_info(attendance)").fetchall()}
 
-    if "casual_leave" not in employee_columns:
-        db.execute("ALTER TABLE employees ADD COLUMN casual_leave INTEGER NOT NULL DEFAULT 15")
-        db.execute("ALTER TABLE employees ADD COLUMN sick_leave INTEGER NOT NULL DEFAULT 10")
-        db.execute("ALTER TABLE employees ADD COLUMN personal_leave INTEGER NOT NULL DEFAULT 5")
-        
-    if "overtime_multiplier" not in employee_columns:
-        db.execute("ALTER TABLE employees ADD COLUMN overtime_multiplier REAL NOT NULL DEFAULT 1.5")
-        
-    attendance_columns = {row[1] for row in db.execute("PRAGMA table_info(attendance)").fetchall()}
-    if "late_minutes" not in attendance_columns:
-        db.execute("ALTER TABLE attendance ADD COLUMN late_minutes INTEGER NOT NULL DEFAULT 0")
-    
-    # Add the permanent-admin column to existing databases.
-    user_columns = {
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+    """)
+
+    def add_column_if_missing(table, column, definition):
+        columns = {
+            row["name"]
+            for row in db.execute(
+                f"PRAGMA table_info({table})"
+            ).fetchall()
+        }
+        if column not in columns:
+            db.execute(
+                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+            )
+
+    employee_columns = {
         row["name"]
-        for row in db.execute("PRAGMA table_info(users)").fetchall()
+        for row in db.execute("PRAGMA table_info(employees)").fetchall()
     }
 
-    if "is_permanent_admin" not in user_columns:
-        db.execute("""
-            ALTER TABLE users
-            ADD COLUMN is_permanent_admin INTEGER NOT NULL DEFAULT 0
-        """)
+    employee_migrations = {
+        "shift_start": "TEXT NOT NULL DEFAULT '09:00'",
+        "shift_end": "TEXT NOT NULL DEFAULT '17:00'",
+        "grace_minutes": "INTEGER NOT NULL DEFAULT 10",
+        "hourly_rate": "REAL NOT NULL DEFAULT 0.0",
+        "casual_leave": "INTEGER NOT NULL DEFAULT 15",
+        "sick_leave": "INTEGER NOT NULL DEFAULT 10",
+        "personal_leave": "INTEGER NOT NULL DEFAULT 5",
+        "overtime_multiplier": "REAL NOT NULL DEFAULT 1.5",
+    }
 
-    # Protect an existing administrator.
-    existing_permanent = db.execute("""
+    for column, definition in employee_migrations.items():
+        if column not in employee_columns:
+            add_column_if_missing("employees", column, definition)
+
+    add_column_if_missing(
+        "attendance", "late_minutes", "INTEGER NOT NULL DEFAULT 0"
+    )
+    add_column_if_missing(
+        "users", "is_permanent_admin", "INTEGER NOT NULL DEFAULT 0"
+    )
+    add_column_if_missing(
+        "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0"
+    )
+
+    # Keep an existing admin protected during migration.
+    permanent = db.execute("""
         SELECT id FROM users
         WHERE is_permanent_admin = 1
-        LIMIT 1
+        ORDER BY id LIMIT 1
     """).fetchone()
 
-    if not existing_permanent:
+    if not permanent:
         existing_admin = db.execute("""
             SELECT id FROM users
             WHERE role = 'admin'
-            ORDER BY id
-            LIMIT 1
+            ORDER BY id LIMIT 1
         """).fetchone()
 
         if existing_admin:
@@ -203,14 +217,136 @@ def init_db():
                 WHERE id = ?
             """, (existing_admin["id"],))
 
-    db.execute("CREATE INDEX IF NOT EXISTS idx_breaks_attendance ON attendance_breaks(attendance_id)")
+    db.executescript("""
+        CREATE INDEX IF NOT EXISTS idx_leave_employee_dates
+            ON leave_requests(employee_id, start_date, end_date);
+        CREATE INDEX IF NOT EXISTS idx_leave_status
+            ON leave_requests(status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_day
+            ON attendance(work_date);
+        CREATE INDEX IF NOT EXISTS idx_attendance_employee_day
+            ON attendance(employee_id, work_date);
+        CREATE INDEX IF NOT EXISTS idx_login_attempts_time
+            ON login_attempts(attempted_at);
+        CREATE INDEX IF NOT EXISTS idx_payroll_period
+            ON payroll(period_month);
+        CREATE INDEX IF NOT EXISTS idx_breaks_attendance
+            ON attendance_breaks(attendance_id);
+    """)
+
     db.commit()
 
+def bootstrap_super_admin_once():
+    enabled = (
+        os.environ.get("WORKTRACK_BOOTSTRAP_ADMIN_ONCE", "")
+        .strip().lower() == "true"
+    )
+    if not enabled:
+        return
+
+    username = os.environ.get(
+        "WORKTRACK_BOOTSTRAP_ADMIN_USERNAME", ""
+    ).strip()
+    password = os.environ.get("WORKTRACK_BOOTSTRAP_ADMIN_PASSWORD", "")
+
+    if not username or len(password) < 16:
+        app.logger.error(
+            "Super Admin setup requires a username and a password "
+            "of at least 16 characters."
+        )
+        return
+
+    db = get_db()
+
+    completed = db.execute(
+        "SELECT 1 FROM app_settings WHERE key = ?",
+        ("super_admin_bootstrap_completed",)
+    ).fetchone()
+
+    if completed:
+        return
+
+    target = db.execute(
+        "SELECT * FROM users WHERE username = ? COLLATE NOCASE",
+        (username,)
+    ).fetchone()
+
+    if target and target["role"] != "admin":
+        app.logger.error(
+            "Super Admin setup stopped: that username belongs "
+            "to an employee account."
+        )
+        return
+
+    permanent = db.execute("""
+        SELECT id FROM users
+        WHERE is_permanent_admin = 1
+        ORDER BY id LIMIT 1
+    """).fetchone()
+
+    now = datetime.now().isoformat(timespec="seconds")
+    password_hash = generate_password_hash(password)
+
+    try:
+        if target:
+            admin_id = target["id"]
+            db.execute("""
+                UPDATE users
+                SET password_hash = ?,
+                    is_permanent_admin = 1,
+                    must_change_password = 0
+                WHERE id = ?
+            """, (password_hash, admin_id))
+
+        elif permanent:
+            admin_id = permanent["id"]
+            db.execute("""
+                UPDATE users
+                SET username = ?,
+                    password_hash = ?,
+                    role = 'admin',
+                    employee_id = NULL,
+                    is_permanent_admin = 1,
+                    must_change_password = 0
+                WHERE id = ?
+            """, (username, password_hash, admin_id))
+
+        else:
+            cursor = db.execute("""
+                INSERT INTO users (
+                    username, password_hash, role, employee_id,
+                    created_at, is_permanent_admin, must_change_password
+                )
+                VALUES (?, ?, 'admin', NULL, ?, 1, 0)
+            """, (username, password_hash, now))
+            admin_id = cursor.lastrowid
+
+        # There must be only one permanent Super Admin.
+        db.execute("""
+            UPDATE users
+            SET is_permanent_admin = 0
+            WHERE id != ? AND is_permanent_admin = 1
+        """, (admin_id,))
+
+        db.execute("""
+            INSERT INTO app_settings (key, value)
+            VALUES (?, ?)
+        """, ("super_admin_bootstrap_completed", now))
+
+        db.commit()
+        app.logger.info("One-time Super Admin setup completed.")
+
+    except Exception:
+        db.rollback()
+        app.logger.exception("Super Admin setup failed.")
+        raise
 
 @app.before_request
 def before_request():
     init_db()
-    # Simple session-based CSRF protection for every state-changing form, including login/logout.
+    bootstrap_super_admin_once()
+
+    # Keep your existing CSRF protection and session setup below.
     if request.method == "POST":
         submitted = request.form.get("csrf_token", "")
         expected = session.get("csrf_token", "")
@@ -219,21 +355,36 @@ def before_request():
     session.setdefault("csrf_token", secrets.token_urlsafe(32))
 
 
+
+
+
 def get_current_user():
     user_id = session.get("user_id")
     if not user_id:
         return None
+
     return get_db().execute("""
-        SELECT u.id, u.username, u.role, u.employee_id,
-               e.name AS employee_name, e.email AS employee_email, e.department AS employee_department
-        FROM users u LEFT JOIN employees e ON e.id = u.employee_id
+        SELECT
+            u.id,
+            u.username,
+            u.role,
+            u.employee_id,
+            u.is_permanent_admin,
+            u.must_change_password,
+            e.name AS employee_name,
+            e.email AS employee_email,
+            e.department AS employee_department
+        FROM users u
+        LEFT JOIN employees e ON e.id = u.employee_id
         WHERE u.id = ?
     """, (user_id,)).fetchone()
+
 
 
 @app.context_processor
 def inject_globals():
     return {"current_user": get_current_user(), "csrf_token": session.get("csrf_token", "")}
+
 
 
 def login_required(view):
@@ -242,13 +393,27 @@ def login_required(view):
         if not session.get("user_id"):
             flash("Please log in to continue.", "error")
             return redirect(url_for("login", next=request.path))
+
         user = get_current_user()
+
         if user is None:
             session.clear()
             flash("Your account is unavailable. Please sign in again.", "error")
             return redirect(url_for("login"))
+
+        allowed_endpoints = ("change_password", "logout")
+
+        if (
+            user["must_change_password"]
+            and request.endpoint not in allowed_endpoints
+        ):
+            flash("Change your temporary password to continue.", "error")
+            return redirect(url_for("change_password"))
+
         return view(*args, **kwargs)
+
     return wrapped
+
 
 
 def admin_required(view):
@@ -603,7 +768,11 @@ def login():
     if session.get("user_id"):
         user = get_current_user()
         if user:
-            return redirect(url_for("dashboard" if user["role"] == "admin" else "attendance"))
+            if user["must_change_password"]:
+                return redirect(url_for("change_password"))
+            return redirect(
+                url_for("dashboard" if user["role"] == "admin" else "attendance")
+             )
         session.clear()
         session["csrf_token"] = secrets.token_urlsafe(32)
 
@@ -633,6 +802,10 @@ def login():
         session["user_id"] = user["id"]
         session["csrf_token"] = secrets.token_urlsafe(32)
         session.permanent = True
+
+        if user["must_change_password"]:
+            return redirect(url_for("change_password"))
+
         target = request.args.get("next", "")
         # Only allow local relative paths for redirects after login.
         parsed = urlparse(target)
@@ -671,8 +844,11 @@ def change_password():
             flash("New passwords do not match.", "error")
         else:
             # Hash and save the new password
-            db.execute("UPDATE users SET password_hash = ? WHERE id = ?", 
-                       (generate_password_hash(new_password), user["id"]))
+            db.execute("""
+                UPDATE users
+                SET password_hash = ?, must_change_password = 0
+                WHERE id = ?
+            """, (generate_password_hash(new_password), user["id"]))
             db.commit()
             
             # Keep the user logged in and redirect
@@ -772,8 +948,18 @@ def employees():
                 cur = db.execute("INSERT INTO employees (name,email,department,hourly_rate,created_at) VALUES (?,?,?,?,?)",
                     (name, email, department, hourly_rate, datetime.now().isoformat(timespec="seconds")))
                 employee_id = cur.lastrowid
-                db.execute("INSERT INTO users (username,password_hash,role,employee_id,created_at) VALUES (?,?,?,?,?)",
-                    (email, generate_password_hash(password), "employee", employee_id, datetime.now().isoformat(timespec="seconds")))
+                db.execute("""
+    INSERT INTO users (
+        username, password_hash, role, employee_id, created_at,
+        must_change_password
+    )
+    VALUES (?, ?, 'employee', ?, ?, 1)
+""", (
+    email,
+    generate_password_hash(password),
+    employee_id,
+    datetime.now().isoformat(timespec="seconds")
+))
                 db.commit()
                 flash(f"Employee {name} and their login account were created. Username: {email}", "success")
                 return redirect(url_for("employees"))
@@ -786,6 +972,65 @@ def employees():
 
 
 @app.post("/employees/<int:employee_id>/create-login")
+
+@app.post("/employees/<int:employee_id>/reset-password")
+@admin_required
+def reset_employee_password(employee_id):
+    user = get_current_user()
+
+    if not user or not user["is_permanent_admin"]:
+        abort(403)
+
+    db = get_db()
+
+    employee = db.execute("""
+        SELECT
+            e.id,
+            e.name,
+            u.id AS user_id,
+            u.role,
+            u.is_permanent_admin
+        FROM employees e
+        JOIN users u ON u.employee_id = e.id
+        WHERE e.id = ?
+    """, (employee_id,)).fetchone()
+
+    if not employee:
+        flash("Employee login account was not found.", "error")
+        return redirect(url_for("employees"))
+
+    if (
+        employee["role"] != "employee"
+        or employee["is_permanent_admin"]
+    ):
+        flash("This account cannot be reset as an employee.", "error")
+        return redirect(url_for("employees"))
+
+    temporary_password = request.form.get("temporary_password", "")
+
+    if len(temporary_password) < 12:
+        flash("Temporary password must be at least 12 characters.", "error")
+        return redirect(url_for("employees"))
+
+    db.execute("""
+        UPDATE users
+        SET password_hash = ?, must_change_password = 1
+        WHERE id = ?
+    """, (
+        generate_password_hash(temporary_password),
+        employee["user_id"]
+    ))
+
+    db.commit()
+
+    flash(
+        f"Temporary password reset for {employee['name']}. "
+        "They must change it at their next login.",
+        "success"
+    )
+
+    return redirect(url_for("employees"))
+
 @admin_required
 def create_employee_login(employee_id):
     db = get_db()
@@ -801,8 +1046,18 @@ def create_employee_login(employee_id):
             flash("This employee already has a login account.", "error")
         else:
             try:
-                db.execute("INSERT INTO users (username,password_hash,role,employee_id,created_at) VALUES (?,?,?,?,?)",
-                    (employee["email"].lower(), generate_password_hash(password), "employee", employee_id, datetime.now().isoformat(timespec="seconds")))
+                db.execute("""
+    INSERT INTO users (
+        username, password_hash, role, employee_id, created_at,
+        must_change_password
+    )
+    VALUES (?, ?, 'employee', ?, ?, 1)
+""", (
+    employee["email"].lower(),
+    generate_password_hash(password),
+    employee_id,
+    datetime.now().isoformat(timespec="seconds")
+))
                 db.commit()
                 flash(f"Login created for {employee['name']}. Username: {employee['email']}", "success")
             except sqlite3.IntegrityError:
