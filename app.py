@@ -1557,7 +1557,20 @@ def export_reports():
     response.headers["Content-Disposition"] = "attachment; filename=HUB pulse_attendance_report.csv"
     return response
 
+@app.route('/create-admin')
+def create_admin():
+    with app.app_context():
+        # Check if admin already exists, if not create one
+        # (Make sure to adjust the model name to match your code, e.g., User or Admin)
+        from werkzeug.security import generate_password_hash
+        # Example assuming a User model with username, password, and role
+        # admin = User(username='admin', password=generate_password_hash('password123'), role='admin')
+        # db.session.add(admin)
+        # db.session.commit()
+        return "Admin user created successfully! You can now log in."
+    
 # Paste this BEFORE def create_admin_cli() and if __name__ == "__main__":
+
 
 @app.route("/payslip/<int:payroll_id>")
 @login_required
