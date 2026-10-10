@@ -1610,9 +1610,14 @@ def create_admin_cli():
 
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "create-admin":
-        create_admin_cli()
-    else:
-        # ADD host="0.0.0.0" HERE:
-        app.run(host="0.0.0.0", debug=os.environ.get("FLASK_DEBUG", "0") == "1")
+# if __name__ == "__main__":
+#     if len(sys.argv) > 1 and sys.argv[1] == "create-admin":
+#         create_admin_cli()
+#     else:
+#         # ADD host="0.0.0.0" HERE:
+#         app.run(host="0.0.0.0", debug=os.environ.get("FLASK_DEBUG", "0") == "1")
+
+if __name__ == '__main__':
+    with app.app_context():
+        init_db()
+    app.run(debug=True)
