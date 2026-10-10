@@ -1560,14 +1560,25 @@ def export_reports():
 @app.route('/create-admin')
 def create_admin():
     with app.app_context():
-        # Check if admin already exists, if not create one
-        # (Make sure to adjust the model name to match your code, e.g., User or Admin)
+        # Import your model (change 'User' to whatever your class name is, e.g., Admin)
+        from app import User, db  # Change 'User' to 'Admin' if your model is named Admin
         from werkzeug.security import generate_password_hash
-        # Example assuming a User model with username, password, and role
-        # admin = User(username='admin', password=generate_password_hash('password123'), role='admin')
-        # db.session.add(admin)
-        # db.session.commit()
-        return "Admin user created successfully! You can now log in."
+        
+        # Check if user already exists
+        existing_user = User.query.filter_by(username='admin').first()
+        if existing_user:
+            # Update password just in case it was hashed differently
+            existing_user.password = generate_password_hash('password123')
+            db.session.commit()
+            return "Existing admin password updated to 'password123'! Try logging in now."
+            
+        # Create a brand new user
+        hashed_password = generate_password_hash('password123')
+        new_user = User(username='admin', password=hashed_password, role='admin')
+        
+        db.session.add(new_user)
+        db.session.commit()
+        return "New admin user created! Username: <b>admin</b>, Password: <b>password123</b>."
     
 # Paste this BEFORE def create_admin_cli() and if __name__ == "__main__":
 
