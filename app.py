@@ -168,7 +168,41 @@ def init_db():
     attendance_columns = {row[1] for row in db.execute("PRAGMA table_info(attendance)").fetchall()}
     if "late_minutes" not in attendance_columns:
         db.execute("ALTER TABLE attendance ADD COLUMN late_minutes INTEGER NOT NULL DEFAULT 0")
-        
+    
+    # Add the permanent-admin column to existing databases.
+    user_columns = {
+        row["name"]
+        for row in db.execute("PRAGMA table_info(users)").fetchall()
+    }
+
+    if "is_permanent_admin" not in user_columns:
+        db.execute("""
+            ALTER TABLE users
+            ADD COLUMN is_permanent_admin INTEGER NOT NULL DEFAULT 0
+        """)
+
+    # Protect an existing administrator.
+    existing_permanent = db.execute("""
+        SELECT id FROM users
+        WHERE is_permanent_admin = 1
+        LIMIT 1
+    """).fetchone()
+
+    if not existing_permanent:
+        existing_admin = db.execute("""
+            SELECT id FROM users
+            WHERE role = 'admin'
+            ORDER BY id
+            LIMIT 1
+        """).fetchone()
+
+        if existing_admin:
+            db.execute("""
+                UPDATE users
+                SET is_permanent_admin = 1
+                WHERE id = ?
+            """, (existing_admin["id"],))
+
     db.execute("CREATE INDEX IF NOT EXISTS idx_breaks_attendance ON attendance_breaks(attendance_id)")
     db.commit()
 
@@ -1557,30 +1591,6 @@ def export_reports():
     response.headers["Content-Disposition"] = "attachment; filename=HUB pulse_attendance_report.csv"
     return response
 
-@app.route('/create-admin')
-def create_admin():
-    with app.app_context():
-        # Import your model (change 'User' to whatever your class name is, e.g., Admin)
-        from app import User, db  # Change 'User' to 'Admin' if your model is named Admin
-        from werkzeug.security import generate_password_hash
-        
-        # Check if user already exists
-        existing_user = User.query.filter_by(username='admin').first()
-        if existing_user:
-            # Update password just in case it was hashed differently
-            existing_user.password = generate_password_hash('password123')
-            db.session.commit()
-            return "Existing admin password updated to 'password123'! Try logging in now."
-            
-        # Create a brand new user
-        hashed_password = generate_password_hash('password123')
-        new_user = User(username='admin', password=hashed_password, role='admin')
-        
-        db.session.add(new_user)
-        db.session.commit()
-        return "New admin user created! Username: <b>admin</b>, Password: <b>password123</b>."
-    
-# Paste this BEFORE def create_admin_cli() and if __name__ == "__main__":
 
 
 @app.route("/payslip/<int:payroll_id>")
@@ -1603,34 +1613,76 @@ def view_payslip(payroll_id):
         
     return render_template("payslip.html", payslip=payslip)
 
+
 def create_admin_cli():
     with app.app_context():
         init_db()
         db = get_db()
-        if db.execute("SELECT id FROM users WHERE role='admin' LIMIT 1").fetchone():
-            print("An administrator account already exists. Use the login page to sign in.")
+
+        existing_admin = db.execute("""
+            SELECT id FROM users WHERE role = 'admin' LIMIT 1
+        """).fetchone()
+
+        if existing_admin:
+            # Ensure the existing administrator is protected.
+            db.execute("""
+                UPDATE users
+                SET is_permanent_admin = 1
+                WHERE id = ?
+            """, (existing_admin["id"],))
+            db.commit()
+            print("An administrator already exists.")
+            print("The existing administrator has been marked permanent.")
+            print("Sign in using that account.")
             return
-        print("Create the first HUB pulse administrator account.")
+
+        print("Create your permanent HUB pulse administrator account.")
         username = input("Admin username: ").strip()
+
         while not username:
             username = input("Username cannot be empty. Admin username: ").strip()
+
         while True:
-            password = getpass.getpass("Password (at least 12 characters): ")
+            password = getpass.getpass("Choose a password (at least 12 characters): ")
+
             if len(password) < 12:
-                print("Use at least 12 characters.")
+                print("Password must contain at least 12 characters.")
                 continue
+
             confirm = getpass.getpass("Confirm password: ")
+
             if password != confirm:
                 print("Passwords do not match. Try again.")
                 continue
+
             break
+
         try:
-            db.execute("INSERT INTO users (username,password_hash,role,employee_id,created_at) VALUES (?,?,?,?,?)",
-                (username,generate_password_hash(password),"admin",None,datetime.now().isoformat(timespec="seconds")))
+            db.execute("""
+                INSERT INTO users (
+                    username,
+                    password_hash,
+                    role,
+                    employee_id,
+                    created_at,
+                    is_permanent_admin
+                )
+                VALUES (?, ?, 'admin', NULL, ?, 1)
+            """, (
+                username,
+                generate_password_hash(password),
+                datetime.now().isoformat(timespec="seconds")
+            ))
+
             db.commit()
-            print("Administrator created. Start the app with: python app.py")
+            print("Permanent administrator created successfully.")
+            print("Username:", username)
+            print("Your password is stored as a secure hash.")
+
         except sqlite3.IntegrityError:
-            print("That username is already in use.")
+            db.rollback()
+            print("That username is already in use. Choose another username.")
+
 
 
 
@@ -1641,7 +1693,16 @@ def create_admin_cli():
 #         # ADD host="0.0.0.0" HERE:
 #         app.run(host="0.0.0.0", debug=os.environ.get("FLASK_DEBUG", "0") == "1")
 
-if __name__ == '__main__':
-    with app.app_context():
-        init_db()
-    app.run(debug=True)
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "create-admin":
+        create_admin_cli()
+    else:
+        with app.app_context():
+            init_db()
+
+        app.run(
+            host="0.0.0.0",
+            port=int(os.environ.get("PORT", "5000")),
+            debug=os.environ.get("FLASK_DEBUG", "0") == "1"
+        )
